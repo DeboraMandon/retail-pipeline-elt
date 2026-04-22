@@ -1,0 +1,188 @@
+version: "3.9"
+
+# =============================================================================
+# retail-pipeline-elt — infrastructure locale
+# Services : PostgreSQL · Airflow (webserver + scheduler) · Metabase
+# Prérequis : Docker Desktop >= 4.x, 4 Go RAM alloués minimum
+# Démarrage  : docker compose up -d
+# Arrêt      : docker compose down
+# Reset complet : docker compose down -v  (supprime les volumes)
+# =============================================================================
+
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.9.3
+  env_file: .env
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${AIRFLOW_DB}
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+    # Connexion vers la base de données métier (utilisée dans les DAGs)
+    PIPELINE_DB_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${PIPELINE_DB}
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/plugins:/opt/airflow/plugins
+    - ./ingestion:/opt/airflow/ingestion       # scripts Python accessibles depuis les DAGs
+    - ./dbt:/opt/airflow/dbt                   # projet dbt accessible depuis les DAGs
+    - ./ml:/opt/airflow/ml                     # scripts ML accessibles depuis les DAGs
+    - airflow_home:/home/airflow
+  depends_on:
+    postgres:
+      condition: service_healthy
+  networks:
+    - pipeline_network
+  restart: unless-stopped
+
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — base de données centrale
+  # Contient deux bases :
+  #   - pipeline_db  : données métier (raw, staging, marts, prédictions)
+  #   - airflow_db   : métadonnées Airflow (ne pas toucher manuellement)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16
+    container_name: pipeline_postgres
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${PIPELINE_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${PIPELINE_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pipeline_network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Airflow — initialisation de la base de métadonnées
+  # Ce service s'exécute une seule fois puis s'arrête (exit 0)
+  # Il crée la base airflow_db, migre le schéma et crée l'utilisateur admin
+  # ---------------------------------------------------------------------------
+  airflow-init:
+    <<: *airflow-common
+    container_name: pipeline_airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        # Créer la base airflow si elle n'existe pas encore
+        PGPASSWORD=${POSTGRES_PASSWORD} psql \
+          -h postgres -U ${POSTGRES_USER} -d ${PIPELINE_DB} \
+          -tc "SELECT 1 FROM pg_database WHERE datname = '${AIRFLOW_DB}'" \
+          | grep -q 1 || \
+          PGPASSWORD=${POSTGRES_PASSWORD} psql \
+          -h postgres -U ${POSTGRES_USER} -d ${PIPELINE_DB} \
+          -c "CREATE DATABASE ${AIRFLOW_DB};"
+        # Migrer le schéma Airflow
+        airflow db migrate
+        # Créer l'utilisateur admin (idempotent)
+        airflow users create \
+          --username ${AIRFLOW_ADMIN_USER} \
+          --password ${AIRFLOW_ADMIN_PASSWORD} \
+          --firstname Admin \
+          --lastname Pipeline \
+          --role Admin \
+          --email admin@pipeline.local || true
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # Airflow Webserver — interface UI (http://localhost:8080)
+  # ---------------------------------------------------------------------------
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: pipeline_airflow_webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Airflow Scheduler — planification et exécution des DAGs
+  # ---------------------------------------------------------------------------
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: pipeline_airflow_scheduler
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Metabase — dashboard et exploration des données (http://localhost:3000)
+  # Première connexion : créer un compte admin dans l'interface
+  # Connexion à PostgreSQL : host=postgres port=5432 db=pipeline_db
+  # ---------------------------------------------------------------------------
+  metabase:
+    image: metabase/metabase:v0.50.0
+    container_name: pipeline_metabase
+    env_file: .env
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: ${METABASE_DB}
+      MB_DB_PORT: 5432
+      MB_DB_USER: ${POSTGRES_USER}
+      MB_DB_PASS: ${POSTGRES_PASSWORD}
+      MB_DB_HOST: postgres
+      JAVA_TIMEZONE: Europe/Paris
+    ports:
+      - "3000:3000"
+    volumes:
+      - metabase_data:/metabase-data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - pipeline_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health | grep -q '\"status\":\"ok\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
+# =============================================================================
+# Volumes persistants
+# postgres_data   : données PostgreSQL (raw, marts, prédictions)
+# airflow_home    : home Airflow (clés, cache pip)
+# metabase_data   : config Metabase (dashboards, connexions sauvegardées)
+# =============================================================================
+
+volumes:
+  postgres_data:
+  airflow_home:
+  metabase_data:
+
+networks:
+  pipeline_network:
+    driver: bridge
