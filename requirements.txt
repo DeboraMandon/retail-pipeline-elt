@@ -1,0 +1,6 @@
+dbt-postgres==1.10.0
+kaggle==2.1.0
+python-dotenv==1.0.1
+pandas==2.1.4
+sqlalchemy==1.4.52
+psycopg2-binary==2.9.9

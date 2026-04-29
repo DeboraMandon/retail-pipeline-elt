@@ -28,6 +28,7 @@ x-airflow-common: &airflow-common
     - ./dbt:/opt/airflow/dbt                   # projet dbt accessible depuis les DAGs
     - ./ml:/opt/airflow/ml                     # scripts ML accessibles depuis les DAGs
     - airflow_home:/home/airflow
+    - ./requirements.txt:/requirements.txt
   depends_on:
     postgres:
       condition: service_healthy
@@ -79,6 +80,7 @@ services:
     command:
       - -c
       - |
+        pip install -r /requirements.txt
         # Créer la base airflow si elle n'existe pas encore
         PGPASSWORD=${POSTGRES_PASSWORD} psql \
           -h postgres -U ${POSTGRES_USER} -d ${PIPELINE_DB} \

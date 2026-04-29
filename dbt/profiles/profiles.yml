@@ -1,0 +1,12 @@
+retail_pipeline:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: postgres          # nom du service Docker, pas localhost
+      port: 5432              # port interne Docker, pas 5433
+      user: pipeline_user
+      password: "{{ env_var('POSTGRES_PASSWORD') }}"
+      dbname: pipeline_db
+      schema: public
+      threads: 4
