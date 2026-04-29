@@ -45,17 +45,24 @@ def get_engine():
 # ── Chargement ────────────────────────────────────────────────────────────────
 def load_csv(engine, csv_file: pathlib.Path, table_name: str):
     print(f"[INFO] Chargement de {csv_file.name} -> raw.{table_name}")
-    df = pd.read_csv(csv_file, dtype=str)  # tout en string : on ne cast pas dans le raw
+    df = pd.read_csv(csv_file, dtype=str)
+    
+    # DROP CASCADE pour supprimer les vues dependantes (staging)
+    with engine.begin() as conn:
+        conn.execute(sqlalchemy.text(
+            f"DROP TABLE IF EXISTS raw.{table_name} CASCADE"
+        ))
+    
     df.to_sql(
         name=table_name,
         con=engine,
         schema="raw",
-        if_exists="replace",   # DROP + CREATE + INSERT (idempotent)
+        if_exists="replace",
         index=False,
         chunksize=10_000,
         method="multi",
     )
-    print(f"[OK]   {len(df):>7} lignes chargées dans raw.{table_name}")
+    print(f"[OK]   {len(df):>7} lignes chargees dans raw.{table_name}")
 
 def load_all():
     if not DATA_RAW_DIR.exists():
