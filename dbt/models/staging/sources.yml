@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: "Données brutes Olist chargées depuis les CSV Kaggle"
+    tables:
+      - name: orders
+        description: "Commandes clients"
+      - name: customers
+        description: "Clients"
+      - name: order_items
+        description: "Lignes de commande"
+      - name: order_payments
+        description: "Paiements"
+      - name: order_reviews
+        description: "Avis clients"
+      - name: products
+        description: "Produits"
+      - name: sellers
+        description: "Vendeurs"
+      - name: geolocation
+        description: "Données géographiques"
+      - name: product_category_name_translation
+        description: "Traduction des catégories produits"
