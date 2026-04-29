@@ -16,8 +16,8 @@ load_dotenv()
 
 DB_USER     = os.getenv("POSTGRES_USER")
 DB_PASSWORD = os.getenv("POSTGRES_PASSWORD")
-DB_HOST     = "localhost"
-DB_PORT     = "5433"          # port exposé par Docker sur la machine
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5433")          # port exposé par Docker sur la machine locale : localhost:5433 et dans Airflow : les variables d'environnement du conteneur prendront le dessus
 DB_NAME     = os.getenv("PIPELINE_DB")
 
 # ── Chemins ───────────────────────────────────────────────────────────────────
