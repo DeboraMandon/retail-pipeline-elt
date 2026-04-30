@@ -11,6 +11,7 @@ kaggle.json
 # --- Données brutes : trop lourdes pour Git (fournir le script de téléchargement)
 data/
 *.csv
+!streamlit_app/streamlit_data/*.csv
 *.parquet
 *.json.gz
 
