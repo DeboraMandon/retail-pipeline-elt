@@ -303,6 +303,15 @@ Nettoyage et cast de types depuis le schéma `raw`.
 \---
 
 
+## Application interactive
+
+🌐 **Demo en ligne** : [retail-pipeline-elt.streamlit.app](https://retail-pipeline-elt-9ffyrd8egbzgyevsyqqdfg.streamlit.app)
+
+Lancer en local (données temps réel) :
+\```bash
+streamlit run streamlit_app/streamlit_app.py
+\```
+
 
 \## Auteur
 
