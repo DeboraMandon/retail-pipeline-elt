@@ -32,6 +32,8 @@ Construit pour démontrer la maîtrise d'une stack data moderne : ingestion, tra
 
 | Transformation | dbt | 1.11 |
 
+| ML | Prophet + scikit-learn | 1.3.0 / 1.8.0 |
+
 | Orchestration | Apache Airflow | 2.9.3 |
 
 | Dashboard | Metabase | latest |

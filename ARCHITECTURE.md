@@ -12,43 +12,21 @@ Pipeline ELT local orchestré par Airflow, transformé par dbt, stocké dans Pos
 
 \## Flux de données
 
-\[Kaggle API]
+Kaggle API
+    ↓
+download_data.py → data/raw/ (CSV)
+    ↓
+load_raw.py → PostgreSQL schéma raw (9 tables, ~1.5M lignes)
+    ↓
+dbt staging → vues nettoyées + cast de types (9 modèles)
+    ↓
+dbt marts → schéma étoile : fact_orders + 3 dimensions (4 tables)
+    ↓
+ML → ml.forecast_revenue (Prophet) + ml.satisfaction_predictions (régression logistique)
+    ↓
+Metabase → 2 dashboards (Analyse ELT + Prédictions ML)
 
-│
-
-▼
-
-\[download\_data.py] ──► data/raw/\*.csv (local)
-
-│
-
-▼
-
-\[load\_raw.py] ──► PostgreSQL : schéma raw
-
-│              9 tables, tout en varchar
-
-│              \~1.5M lignes
-
-▼
-
-\[dbt staging] ──► PostgreSQL : schéma staging
-
-│              9 vues (materialized: view)
-
-│              Cast de types, renommage
-
-▼
-
-\[dbt marts] ──► PostgreSQL : schéma marts
-
-│              4 tables (materialized: table)
-
-│              Schéma étoile
-
-▼
-
-\[Metabase] ──► Dashboard analytique
+Orchestration : DAG Airflow 6 tâches (hebdomadaire, lundi 6h UTC)
 
 
 
@@ -120,7 +98,7 @@ review\_score
 
 \- DAG hebdomadaire (lundi 6h UTC)
 
-\- 4 tâches BashOperator enchaînées
+\- 6 tâches BashOperator enchaînées
 
 \- 2 retries avec 5 min de délai
 
@@ -136,6 +114,25 @@ review\_score
 
 \- `requirements.txt` monté en volume pour la reproductibilité des packages
 
+
+\### Bloc ML
+
+\- Prophet 1.3.0 : prévision du CA mensuel (`growth='flat'`, saisonnalité multiplicative)
+
+\- scikit-learn 1.8.0 : régression logistique sur 4 features (delivery_days, total_payment, item_count, total_freight)
+
+\- Résultats stockés dans le schéma `ml` de PostgreSQL
+
+\- Performance satisfaction : Accuracy 81%, AUC-ROC 0.680
+
+
+\### Metabase
+
+\- Connexion via réseau Docker interne (host: postgres, port: 5432)
+
+\- Dashboard 1 — Analyse ELT : CA mensuel, Top catégories, Satisfaction, Délais livraison
+
+\- Dashboard 2 — Prédictions ML : Prévision Prophet, Distribution probabilités satisfaction
 
 
 \## Variables d'environnement
