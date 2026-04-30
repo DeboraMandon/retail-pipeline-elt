@@ -1,0 +1,15 @@
+name: Keep Alive — Streamlit App
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"  # toutes les 6 heures
+  workflow_dispatch:         # déclenchement manuel possible
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Streamlit app
+        run: |
+          curl -s -o /dev/null -w "%{http_code}" \
+            https://retail-pipeline-elt-9ffyrd8egbzgyevsyqqdfg.streamlit.app
