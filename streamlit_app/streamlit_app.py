@@ -45,7 +45,7 @@ def get_engine():
 def query(_engine, sql):
     return pd.read_sql(sql, _engine)
 
-DATA_DIR = "streamlit_data"
+DATA_DIR = os.path.join(os.path.dirname(__file__), "streamlit_data")
 
 def load(name, _engine, sql):
     """Charge depuis PostgreSQL si disponible, sinon depuis le CSV statique."""
