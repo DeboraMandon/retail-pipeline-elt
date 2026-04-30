@@ -58,5 +58,19 @@ with DAG(
         doc_md="Execute les tests de qualite dbt",
     )
 
+    # ── Tâche 5 : prévision du CA avec Prophet ────────────────────────────────
+    forecast_revenue = BashOperator(
+        task_id="forecast_revenue",
+        bash_command="cd /opt/airflow/ml && python forecast_revenue.py",
+        doc_md="Prevision du CA mensuel sur 3 mois avec Prophet",
+    )
+
+    # ── Tâche 6 : prédiction de satisfaction ─────────────────────────────────
+    predict_satisfaction = BashOperator(
+        task_id="predict_satisfaction",
+        bash_command="cd /opt/airflow/ml && python predict_satisfaction.py",
+        doc_md="Prediction de satisfaction client par regression logistique",
+    )
+
     # ── Ordre d'exécution ─────────────────────────────────────────────────────
-    download_data >> load_raw >> dbt_run >> dbt_test
+    download_data >> load_raw >> dbt_run >> dbt_test >> forecast_revenue >> predict_satisfaction
